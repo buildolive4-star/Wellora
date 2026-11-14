@@ -328,6 +328,7 @@ fun PackageComparisonDialog(
             }
         },
         text = {
+            SecureDialogWindowEffect()
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -440,6 +441,7 @@ fun SafetyReportDialog(
             )
         },
         text = {
+            SecureDialogWindowEffect()
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)

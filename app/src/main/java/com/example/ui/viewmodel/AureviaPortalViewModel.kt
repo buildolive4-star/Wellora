@@ -34,7 +34,7 @@ import kotlinx.coroutines.launch
 
 sealed interface PortalEvent {
     data class ShowMessage(val text: String) : PortalEvent
-    data class TriggerLocalNotification(val title: String, val body: String) : PortalEvent
+    data class TriggerLocalNotification(val title: String, val body: String, val type: String = "BOOKING") : PortalEvent
     data object ForceRemoteSignOut : PortalEvent
 }
 
@@ -48,8 +48,10 @@ class AureviaPortalViewModel(
 ) : ViewModel() {
 
     private var initialSessionEpoch: Long? = null
+    private var initialNotificationsSeeded = false
+    private val seenNotificationIds = mutableSetOf<String>()
 
-    private val _events = MutableSharedFlow<PortalEvent>(extraBufferCapacity = 8)
+    private val _events = MutableSharedFlow<PortalEvent>(extraBufferCapacity = 16)
     val events = _events.asSharedFlow()
 
     private val _filter = MutableStateFlow(DiscoveryFilter())
@@ -90,6 +92,25 @@ class AureviaPortalViewModel(
             }
         }
         @Suppress("UNCHECKED_CAST")
+        val notifications = values[7] as List<com.example.model.AppNotification>
+        if (!initialNotificationsSeeded) {
+            seenNotificationIds.addAll(notifications.map { it.id })
+            initialNotificationsSeeded = true
+        } else {
+            val pushEnabled = profile?.notifyPush != false
+            notifications.forEach { notif ->
+                if (notif.id.isNotBlank() && seenNotificationIds.add(notif.id) && !notif.isRead && pushEnabled) {
+                    _events.tryEmit(
+                        PortalEvent.TriggerLocalNotification(
+                            title = notif.title,
+                            body = notif.message,
+                            type = notif.type
+                        )
+                    )
+                }
+            }
+        }
+        @Suppress("UNCHECKED_CAST")
         PortalDashboardData(
             profile = profile,
             addresses = values[1] as List<com.example.model.SavedAddress>,
@@ -98,7 +119,7 @@ class AureviaPortalViewModel(
             payments = values[4] as List<PaymentTransaction>,
             reviews = values[5] as List<com.example.model.ServiceReview>,
             tickets = values[6] as List<SupportTicket>,
-            notifications = values[7] as List<com.example.model.AppNotification>
+            notifications = notifications
         )
     }
         .map<PortalDashboardData, UiState<PortalDashboardData>> { UiState.Success(it) }
@@ -332,12 +353,6 @@ class AureviaPortalViewModel(
                         confirmedGatewayRef = gatewayRef
                     )
                 }
-                _events.tryEmit(
-                    PortalEvent.TriggerLocalNotification(
-                        title = "Reservation Confirmed ($bookingCode)",
-                        body = "Your $serviceTitle reservation is confirmed via $gatewayRef."
-                    )
-                )
             }.onFailure { err ->
                 _bookingDraft.update {
                     it.copy(isSubmitting = false, errorMessage = err.localizedMessage ?: "Confirmation failed")
@@ -486,8 +501,69 @@ class AureviaPortalViewModel(
         }
     }
 
+    fun confirmPendingOrderFromLedger(booking: Booking, payment: PaymentTransaction) {
+        val gatewayRef = "SETTLED-${java.util.UUID.randomUUID().toString().take(8).uppercase()}"
+        viewModelScope.launch {
+            repository.confirmGatewayPayment(
+                bookingId = booking.id,
+                paymentId = payment.id,
+                bookingCode = booking.bookingCode,
+                serviceTitle = booking.serviceTitle,
+                gatewayRef = gatewayRef
+            ).onSuccess {
+                _events.tryEmit(PortalEvent.ShowMessage("Payment settled & booking ${booking.bookingCode} confirmed"))
+            }.onFailure {
+                _events.tryEmit(PortalEvent.ShowMessage(it.localizedMessage ?: "Settlement failed"))
+            }
+        }
+    }
+
+    fun sendBookingReminder(booking: Booking) {
+        viewModelScope.launch {
+            repository.sendBookingReminderNotification(booking)
+                .onSuccess {
+                    _events.tryEmit(PortalEvent.ShowMessage("Booking reminder sent for ${booking.bookingCode}"))
+                }
+                .onFailure {
+                    _events.tryEmit(PortalEvent.ShowMessage(it.localizedMessage ?: "Could not send reminder"))
+                }
+        }
+    }
+
+    fun finalizeRefund(booking: Booking, linkedPayment: PaymentTransaction?) {
+        viewModelScope.launch {
+            repository.finalizeRefund(booking, linkedPayment)
+                .onSuccess {
+                    _events.tryEmit(PortalEvent.ShowMessage("Refund settled for ${booking.bookingCode}"))
+                }
+                .onFailure {
+                    _events.tryEmit(PortalEvent.ShowMessage(it.localizedMessage ?: "Could not finalize refund"))
+                }
+        }
+    }
+
     fun markNotificationRead(id: String) {
         viewModelScope.launch { repository.markNotificationRead(id) }
+    }
+
+    fun markAllNotificationsRead() {
+        val unreadIds = (dashboardState.value as? UiState.Success)?.data?.notifications
+            ?.filter { !it.isRead }
+            ?.map { it.id }
+            .orEmpty()
+        if (unreadIds.isEmpty()) return
+        viewModelScope.launch {
+            repository.markAllNotificationsRead(unreadIds)
+                .onSuccess { _events.tryEmit(PortalEvent.ShowMessage("All notifications marked read")) }
+        }
+    }
+
+    fun sendTestNotification() {
+        viewModelScope.launch {
+            repository.createTestNotification()
+                .onSuccess { _events.tryEmit(PortalEvent.ShowMessage("Test notification dispatched")) }
+                .onFailure { _events.tryEmit(PortalEvent.ShowMessage(it.localizedMessage ?: "Notification test failed")) }
+        }
     }
 
     suspend fun prepareLogoutAllDevices() {

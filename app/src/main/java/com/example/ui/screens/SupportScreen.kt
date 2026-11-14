@@ -24,6 +24,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.AlertDialog
@@ -49,6 +50,7 @@ import com.example.model.FaqItem
 import com.example.model.SupportMessage
 import com.example.model.SupportTicket
 import com.example.model.TicketCategory
+import com.example.ui.components.SecureDialogWindowEffect
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.AlabasterSurface
 import com.example.ui.theme.ChampagneGold
@@ -75,6 +77,16 @@ fun SupportScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var preselectedCategory by remember { mutableStateOf(TicketCategory.GENERAL) }
     var expandedFaqId by remember { mutableStateOf<String?>(null) }
+    var faqQuery by remember { mutableStateOf("") }
+
+    val filteredFaqs = remember(faqs, faqQuery) {
+        if (faqQuery.isBlank()) faqs
+        else faqs.filter {
+            it.question.contains(faqQuery, ignoreCase = true) ||
+                it.answer.contains(faqQuery, ignoreCase = true) ||
+                it.category.contains(faqQuery, ignoreCase = true)
+        }
+    }
 
     val activeTicket = tickets.firstOrNull { it.id == activeTicketId }
 
@@ -290,17 +302,27 @@ fun SupportScreen(
             }
         }
 
-        // FAQ Accordion
+        // FAQ Search & Accordion
         item {
-            Text(
-                text = "Frequently Asked Questions",
-                style = MaterialTheme.typography.headlineSmall,
-                color = DeepCharcoal,
-                modifier = Modifier.padding(top = 6.dp)
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(top = 6.dp)) {
+                Text(
+                    text = "Frequently Asked Questions",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = DeepCharcoal
+                )
+                OutlinedTextField(
+                    value = faqQuery,
+                    onValueChange = { faqQuery = it },
+                    placeholder = { Text("Search FAQs (refunds, boundaries, UPI, privacy)...") },
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
 
-        items(faqs, key = { it.id }) { faq ->
+        items(filteredFaqs, key = { it.id }) { faq ->
             val expanded = expandedFaqId == faq.id
             Surface(
                 onClick = { expandedFaqId = if (expanded) null else faq.id },
@@ -348,6 +370,7 @@ fun SupportScreen(
             containerColor = IvorySurface,
             title = { Text("Open Concierge Support Ticket", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     TicketCategory.entries.forEach { cat ->
                         Surface(

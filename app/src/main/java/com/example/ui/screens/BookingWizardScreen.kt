@@ -172,6 +172,28 @@ fun BookingWizardScreen(
 
             AnimatedContent(targetState = draft.step, label = "booking_step") { step ->
                 when (step) {
+                    1 -> {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = IvorySurface,
+                                border = BorderStroke(1.dp, WarmStoneOutline),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(service.category.displayName.uppercase(), style = MaterialTheme.typography.labelSmall, color = DeepBronze)
+                                    Text(service.title, style = MaterialTheme.typography.titleLarge, color = DeepCharcoal)
+                                    Text(service.shortSummary, style = MaterialTheme.typography.bodySmall, color = MutedTaupe)
+                                }
+                            }
+                            Button(
+                                onClick = { onSetStep(2) },
+                                modifier = Modifier.fillMaxWidth().height(50.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = DeepCharcoal)
+                            ) { Text("Continue to Location") }
+                        }
+                    }
+
                     2 -> {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("Choose Service City", style = MaterialTheme.typography.titleMedium)

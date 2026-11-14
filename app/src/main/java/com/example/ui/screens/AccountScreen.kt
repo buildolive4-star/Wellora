@@ -48,6 +48,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.ServiceItem
+import com.example.ui.components.PrivacyShieldBanner
+import com.example.ui.components.SecureDialogWindowEffect
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.AlabasterSurface
 import com.example.ui.theme.CrimsonAlert
@@ -56,6 +58,7 @@ import com.example.ui.theme.DeepCharcoal
 import com.example.ui.theme.IvoryBackground
 import com.example.ui.theme.IvorySurface
 import com.example.ui.theme.MutedTaupe
+import com.example.ui.theme.SageEmerald
 import com.example.ui.theme.WarmStoneOutline
 import com.example.ui.viewmodel.PortalDashboardData
 import com.example.util.NotificationHelper
@@ -81,6 +84,8 @@ fun AccountScreen(
     onDeleteAddress: (addressId: String) -> Unit,
     onOpenService: (ServiceItem) -> Unit,
     onMarkNotificationRead: (String) -> Unit,
+    onMarkAllNotificationsRead: () -> Unit,
+    onSendTestNotification: () -> Unit,
     onSignOutSingleDevice: () -> Unit,
     onSignOutAllDevices: () -> Unit
 ) {
@@ -100,11 +105,16 @@ fun AccountScreen(
     var notifyPush by remember(profile?.notifyPush) { mutableStateOf(profile?.notifyPush ?: true) }
 
     var showAddAddressDialog by remember { mutableStateOf(false) }
+    var permissionCheckVersion by remember { mutableStateOf(0) }
+    val hasSystemNotifPermission = remember(permissionCheckVersion, context) {
+        NotificationHelper.hasNotificationPermission(context)
+    }
 
     val notifPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         notifyPush = granted
+        permissionCheckVersion++
     }
 
     val favoriteServices = remember(dashboardData, allServices) {
@@ -124,6 +134,10 @@ fun AccountScreen(
                 Text("MEMBER PORTAL", style = MaterialTheme.typography.labelSmall, color = DeepBronze)
                 Text("My Account & Preferences", style = MaterialTheme.typography.headlineMedium, color = DeepCharcoal)
             }
+        }
+
+        item {
+            PrivacyShieldBanner()
         }
 
         // Profile Completion & Verification Card
@@ -203,25 +217,98 @@ fun AccountScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Icon(Icons.Filled.Notifications, contentDescription = null, tint = DeepBronze)
-                        Text("Notifications Inbox (${dashboardData?.notifications?.size ?: 0})", style = MaterialTheme.typography.titleMedium)
-                    }
                     val notifications = dashboardData?.notifications.orEmpty()
+                    val unreadCount = notifications.count { !it.isRead }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Filled.Notifications, contentDescription = null, tint = DeepBronze)
+                            Text("Notifications Inbox (${notifications.size})", style = MaterialTheme.typography.titleMedium)
+                        }
+                        StatusBadge(
+                            label = if (hasSystemNotifPermission) "ALERTS ON" else "ENABLE ALERTS",
+                            tone = if (hasSystemNotifPermission) "VERIFIED" else "PENDING"
+                        )
+                    }
+                    if (!hasSystemNotifPermission) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = AlabasterSurface,
+                            border = BorderStroke(1.dp, WarmStoneOutline),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Allow Android notifications for instant booking, concierge & refund alerts.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = DeepCharcoal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                        } else {
+                                            NotificationHelper.openNotificationSettings(context)
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.testTag("enable_notifications_button")
+                                ) { Text("Enable") }
+                            }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = onSendTestNotification,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("send_test_notification_button")
+                        ) {
+                            Text("Send Test Alert")
+                        }
+                        if (unreadCount > 0) {
+                            TextButton(
+                                onClick = onMarkAllNotificationsRead,
+                                modifier = Modifier.testTag("mark_all_notifications_read_button")
+                            ) {
+                                Text("Mark All Read ($unreadCount)")
+                            }
+                        } else {
+                            TextButton(
+                                onClick = { NotificationHelper.openNotificationSettings(context) }
+                            ) {
+                                Text("System Settings")
+                            }
+                        }
+                    }
                     if (notifications.isEmpty()) {
                         Text("No notifications yet. Booking, payment, and refund alerts appear here.", style = MaterialTheme.typography.bodySmall, color = MutedTaupe)
                     } else {
-                        notifications.take(6).forEach { notif ->
+                        notifications.take(8).forEach { notif ->
                             Surface(
                                 onClick = { if (!notif.isRead) onMarkNotificationRead(notif.id) },
                                 shape = RoundedCornerShape(12.dp),
                                 color = if (notif.isRead) AlabasterSurface else IvoryBackground,
-                                border = BorderStroke(1.dp, WarmStoneOutline),
+                                border = BorderStroke(1.dp, if (notif.isRead) WarmStoneOutline else SageEmerald.copy(alpha = 0.4f)),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                        Text(notif.title, style = MaterialTheme.typography.titleSmall)
+                                        Text(notif.title, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
                                         if (!notif.isRead) StatusBadge("NEW", "PENDING")
                                     }
                                     Text(notif.message, style = MaterialTheme.typography.bodySmall, color = MutedTaupe)
@@ -353,6 +440,7 @@ fun AccountScreen(
             containerColor = IvorySurface,
             title = { Text("Add Saved Address", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = label, onValueChange = { label = it }, label = { Text("Label (Residence, Hotel, Office)") })
                     OutlinedTextField(value = line1, onValueChange = { line1 = it }, label = { Text("Street / Building / Suite") })

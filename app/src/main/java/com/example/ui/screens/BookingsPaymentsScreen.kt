@@ -45,7 +45,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.example.model.Booking
 import com.example.model.BookingStatus
+import com.example.model.PaymentStatus
 import com.example.model.PaymentTransaction
+import com.example.ui.components.SecureDialogWindowEffect
 import com.example.ui.components.StatusBadge
 import com.example.ui.theme.AlabasterSurface
 import com.example.ui.theme.ChampagneGold
@@ -71,6 +73,8 @@ fun BookingsPaymentsScreen(
     onReschedule: (Booking, newDate: String, newSlot: String, newAddress: String) -> Unit,
     onCancelBooking: (Booking, reason: String, linkedPayment: PaymentTransaction?) -> Unit,
     onSubmitReview: (Booking, rating: Int, comment: String) -> Unit,
+    onSendReminder: (Booking) -> Unit,
+    onFinalizeRefund: (Booking, PaymentTransaction?) -> Unit,
     onDiscoverServices: () -> Unit
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -139,7 +143,10 @@ fun BookingsPaymentsScreen(
                                     { onMarkCompleted(booking) }
                                 } else null,
                                 onCancel = { cancelTarget = booking },
-                                onWriteReview = null
+                                onWriteReview = null,
+                                onSendReminder = if (booking.status == BookingStatus.CONFIRMED.code) {
+                                    { onSendReminder(booking) }
+                                } else null
                             )
                         }
                     }
@@ -169,13 +176,17 @@ fun BookingsPaymentsScreen(
                         item { EmptyBookingsCard("No cancelled bookings", onDiscoverServices) }
                     } else {
                         items(cancelled, key = { it.id }) { booking ->
+                            val linkedPayment = payments.firstOrNull { it.bookingId == booking.id }
                             BookingCard(
                                 booking = booking,
                                 onConfirmOrder = null,
                                 onReschedule = null,
                                 onMarkCompleted = null,
                                 onCancel = null,
-                                onWriteReview = null
+                                onWriteReview = null,
+                                onFinalizeRefund = if (booking.paymentStatus == PaymentStatus.REFUND_REQUESTED.code) {
+                                    { onFinalizeRefund(booking, linkedPayment) }
+                                } else null
                             )
                         }
                     }
@@ -231,6 +242,7 @@ fun BookingsPaymentsScreen(
             containerColor = IvorySurface,
             title = { Text("Verified Review — ${target.serviceTitle}", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(
                         text = "Your public review displays only your first name and last initial for privacy.",
@@ -282,6 +294,7 @@ fun BookingsPaymentsScreen(
             containerColor = IvorySurface,
             title = { Text("Cancel Booking ${target.bookingCode}", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "Paid reservations automatically initiate a tracked refund request and support ticket.",
@@ -321,6 +334,7 @@ fun BookingsPaymentsScreen(
             containerColor = IvorySurface,
             title = { Text("Reschedule ${target.bookingCode}", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(value = newDate, onValueChange = { newDate = it }, label = { Text("Date (YYYY-MM-DD)") })
                     OutlinedTextField(value = newSlot, onValueChange = { newSlot = it }, label = { Text("Time Slot") })
@@ -349,6 +363,7 @@ fun BookingsPaymentsScreen(
             containerColor = IvorySurface,
             title = { Text("Official Payment Receipt", style = MaterialTheme.typography.titleLarge) },
             text = {
+                SecureDialogWindowEffect()
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Receipt No: ${tx.receiptNumber}", style = MaterialTheme.typography.titleSmall)
                     Text("Booking Code: ${tx.bookingCode}", style = MaterialTheme.typography.bodySmall)
@@ -376,7 +391,9 @@ private fun BookingCard(
     onMarkCompleted: (() -> Unit)?,
     onCancel: (() -> Unit)?,
     onWriteReview: (() -> Unit)?,
-    alreadyReviewed: Boolean = false
+    alreadyReviewed: Boolean = false,
+    onSendReminder: (() -> Unit)? = null,
+    onFinalizeRefund: (() -> Unit)? = null
 ) {
     Surface(
         shape = RoundedCornerShape(16.dp),
@@ -453,6 +470,27 @@ private fun BookingCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(10.dp)
                 ) { Text("Mark Experience Completed") }
+            }
+
+            if (onSendReminder != null) {
+                OutlinedButton(
+                    onClick = onSendReminder,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("send_reminder_${booking.bookingCode}"),
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Send Reminder Alert") }
+            }
+
+            if (onFinalizeRefund != null) {
+                Button(
+                    onClick = onFinalizeRefund,
+                    colors = ButtonDefaults.buttonColors(containerColor = SageEmerald),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settle_refund_${booking.bookingCode}"),
+                    shape = RoundedCornerShape(10.dp)
+                ) { Text("Settle Tracked Refund") }
             }
 
             if (onWriteReview != null) {

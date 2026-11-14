@@ -806,6 +806,7 @@ class AureviaFirestoreRepository(private val db: FirebaseFirestore) {
             .collection("tickets").document(ticketId).collection("messages")
         val msgDoc = messagesRef.document()
         val replyDoc = messagesRef.document()
+        val notifDoc = db.collection("users").document(uid).collection("notifications").document()
 
         try {
             msgDoc.set(
@@ -822,6 +823,18 @@ class AureviaFirestoreRepository(private val db: FirebaseFirestore) {
                     "userId" to uid,
                     "senderRole" to "CONCIERGE",
                     "body" to "Aurevia Member Concierge has received your message and logged it on case #${ticketId.take(6).uppercase(Locale.US)}. A dedicated specialist responds within 15 minutes.",
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+
+            notifDoc.set(
+                mapOf(
+                    "userId" to uid,
+                    "title" to "Concierge Reply (#${ticketId.take(6).uppercase(Locale.US)})",
+                    "message" to "Aurevia Member Concierge replied to your support conversation.",
+                    "type" to NotificationType.SUPPORT.code,
+                    "isRead" to false,
+                    "relatedId" to ticketId,
                     "createdAt" to FieldValue.serverTimestamp()
                 )
             ).await()
@@ -924,6 +937,118 @@ class AureviaFirestoreRepository(private val db: FirebaseFirestore) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.UPDATE, docRef.path)
+            throw e
+        }
+    }
+
+    suspend fun markAllNotificationsRead(notificationIds: List<String>): Result<Unit> = runCatching {
+        if (notificationIds.isEmpty()) return@runCatching
+        val uid = requireUserId()
+        val colRef = db.collection("users").document(uid).collection("notifications")
+        val batch = db.batch()
+        notificationIds.take(400).forEach { id ->
+            batch.update(colRef.document(id), "isRead", true)
+        }
+        try {
+            batch.commit().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, colRef.path)
+            throw e
+        }
+    }
+
+    suspend fun sendBookingReminderNotification(booking: Booking): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        val notifRef = db.collection("users").document(uid).collection("notifications").document()
+        try {
+            notifRef.set(
+                mapOf(
+                    "userId" to uid,
+                    "title" to "Upcoming Reservation Reminder (${booking.bookingCode})",
+                    "message" to "${booking.serviceTitle} is scheduled on ${booking.scheduledDate} at ${booking.scheduledTimeSlot} (${booking.city}).",
+                    "type" to NotificationType.BOOKING.code,
+                    "isRead" to false,
+                    "relatedId" to booking.id,
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, notifRef.path)
+            throw e
+        }
+    }
+
+    suspend fun createTestNotification(): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        val notifRef = db.collection("users").document(uid).collection("notifications").document()
+        try {
+            notifRef.set(
+                mapOf(
+                    "userId" to uid,
+                    "title" to "Aurevia Concierge Alerts Active",
+                    "message" to "Booking confirmations, payment receipts, refund updates, and concierge replies will notify you here.",
+                    "type" to NotificationType.BOOKING.code,
+                    "isRead" to false,
+                    "relatedId" to "test_alert",
+                    "createdAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, notifRef.path)
+            throw e
+        }
+    }
+
+    suspend fun finalizeRefund(
+        booking: Booking,
+        linkedPayment: PaymentTransaction?
+    ): Result<Unit> = runCatching {
+        val uid = requireUserId()
+        val bookingDocRef = db.collection("users").document(uid).collection("bookings").document(booking.id)
+        val notifDocRef = db.collection("users").document(uid).collection("notifications").document()
+
+        val batch = db.batch()
+        batch.update(
+            bookingDocRef,
+            mapOf(
+                "paymentStatus" to PaymentStatus.REFUNDED.code,
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+        )
+        if (linkedPayment != null && linkedPayment.status == "REFUND_INITIATED") {
+            val payDocRef = db.collection("users").document(uid).collection("payments").document(linkedPayment.id)
+            batch.update(
+                payDocRef,
+                mapOf(
+                    "status" to "REFUNDED",
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            )
+        }
+        batch.set(
+            notifDocRef,
+            mapOf(
+                "userId" to uid,
+                "title" to "Refund Credited (${booking.bookingCode})",
+                "message" to "Your refund for ${booking.serviceTitle} has settled cleanly to your original payment method.",
+                "type" to NotificationType.REFUND.code,
+                "isRead" to false,
+                "relatedId" to booking.id,
+                "createdAt" to FieldValue.serverTimestamp()
+            )
+        )
+        try {
+            batch.commit().await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, bookingDocRef.path)
             throw e
         }
     }

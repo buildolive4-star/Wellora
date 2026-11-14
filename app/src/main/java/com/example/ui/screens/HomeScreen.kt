@@ -61,6 +61,7 @@ import com.example.R
 import com.example.data.CatalogRepository
 import com.example.model.ServiceCategory
 import com.example.model.ServiceItem
+import com.example.ui.components.SecureDialogWindowEffect
 import com.example.ui.components.ServiceEditorialCard
 import com.example.ui.theme.AlabasterSurface
 import com.example.ui.theme.ChampagneGold
@@ -521,6 +522,7 @@ fun HomeScreen(
                         Text(
                             text = "• Verified 18+ background-screened specialists\n" +
                                 "• Strictly non-sexual boundaries on all companionship services\n" +
+                                "• Screenshot & screen-recording shield active across all views\n" +
                                 "• Private customer records & zero raw card storage\n" +
                                 "• 24/7 emergency escalation & transparent refund tracking",
                             style = MaterialTheme.typography.bodySmall,
@@ -592,7 +594,10 @@ fun HomeScreen(
             onDismissRequest = { policyModalTitle = null },
             containerColor = IvorySurface,
             title = { Text(policyModalTitle ?: "", style = MaterialTheme.typography.titleLarge) },
-            text = { Text(policyModalBody, style = MaterialTheme.typography.bodyMedium, color = MutedTaupe) },
+            text = {
+                SecureDialogWindowEffect()
+                Text(policyModalBody, style = MaterialTheme.typography.bodyMedium, color = MutedTaupe)
+            },
             confirmButton = {
                 TextButton(onClick = { policyModalTitle = null }) {
                     Text("Close")

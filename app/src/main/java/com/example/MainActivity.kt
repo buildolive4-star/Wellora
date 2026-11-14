@@ -1,9 +1,14 @@
 package com.example
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -41,6 +46,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,12 +89,15 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE
+        )
         NotificationHelper.ensureChannel(this)
 
         setContent {
@@ -187,12 +196,27 @@ private fun AureviaPortalShell(
     val activeMessages by viewModel.activeTicketMessages.collectAsStateWithLifecycle()
     val isBusy by viewModel.isBusy.collectAsStateWithLifecycle()
 
+    var notificationPromptAttempted by rememberSaveable { mutableStateOf(false) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { /* Permission state is reflected dynamically via NotificationHelper */ }
+
+    LaunchedEffect(currentUserId) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !notificationPromptAttempted &&
+            !NotificationHelper.hasNotificationPermission(context)
+        ) {
+            notificationPromptAttempted = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 is PortalEvent.ShowMessage -> snackbarHostState.showSnackbar(event.text)
                 is PortalEvent.TriggerLocalNotification ->
-                    NotificationHelper.showLocalNotification(context, event.title, event.body)
+                    NotificationHelper.showLocalNotification(context, event.title, event.body, event.type)
                 PortalEvent.ForceRemoteSignOut ->
                     signOutUser(credentialManager, scope)
             }
@@ -382,25 +406,13 @@ private fun AureviaPortalShell(
                                 bookings = dashData?.bookings.orEmpty(),
                                 payments = dashData?.payments.orEmpty(),
                                 reviewedBookingIds = reviewedBookingIds,
-                                onConfirmPendingOrder = { booking, payment ->
-                                    scope.launch {
-                                        val repo = AureviaFirestoreRepository(context)
-                                        val ref = "SETTLED-${UUID.randomUUID().toString().take(8).uppercase()}"
-                                        repo.confirmGatewayPayment(
-                                            bookingId = booking.id,
-                                            paymentId = payment.id,
-                                            bookingCode = booking.bookingCode,
-                                            serviceTitle = booking.serviceTitle,
-                                            gatewayRef = ref
-                                        ).onSuccess {
-                                            snackbarHostState.showSnackbar("Payment settled & booking ${booking.bookingCode} confirmed")
-                                        }
-                                    }
-                                },
+                                onConfirmPendingOrder = viewModel::confirmPendingOrderFromLedger,
                                 onMarkCompleted = viewModel::markCompleted,
                                 onReschedule = viewModel::rescheduleBooking,
                                 onCancelBooking = viewModel::cancelBooking,
                                 onSubmitReview = viewModel::submitReview,
+                                onSendReminder = viewModel::sendBookingReminder,
+                                onFinalizeRefund = viewModel::finalizeRefund,
                                 onDiscoverServices = { selectedTab = 1 }
                             )
                         }
@@ -424,6 +436,8 @@ private fun AureviaPortalShell(
                             onDeleteAddress = viewModel::deleteSavedAddress,
                             onOpenService = { viewModel.openServiceDetail(it.id) },
                             onMarkNotificationRead = viewModel::markNotificationRead,
+                            onMarkAllNotificationsRead = viewModel::markAllNotificationsRead,
+                            onSendTestNotification = viewModel::sendTestNotification,
                             onSignOutSingleDevice = {
                                 signOutUser(credentialManager, scope)
                             },
