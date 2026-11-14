@@ -87,17 +87,25 @@ jobs:
       - name: Accept Android SDK licenses
         run: |
           SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "Using Android SDK root: $SDK_ROOT"
           SDKMANAGER_BIN=""
           if [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
             SDKMANAGER_BIN="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          elif command -v sdkmanager >/dev/null 2>&1; then
+          else
+            SDKMANAGER_BIN="$(find "$SDK_ROOT/cmdline-tools" -maxdepth 3 -type f -name sdkmanager 2>/dev/null | head -n 1 || true)"
+          fi
+          if [ -z "$SDKMANAGER_BIN" ] && command -v sdkmanager >/dev/null 2>&1; then
             SDKMANAGER_BIN="$(command -v sdkmanager)"
           fi
           if [ -n "$SDKMANAGER_BIN" ]; then
-            yes | "$SDKMANAGER_BIN" --licenses >/dev/null 2>&1 || true
-            yes | "$SDKMANAGER_BIN" "platforms;android-36" >/dev/null 2>&1 || true
-            yes | "$SDKMANAGER_BIN" "platforms;android-36.1" >/dev/null 2>&1 || true
-            yes | "$SDKMANAGER_BIN" "build-tools;36.0.0" >/dev/null 2>&1 || true
+            echo "Found sdkmanager: $SDKMANAGER_BIN"
+            yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" --licenses >/dev/null 2>&1 || true
+            yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" "platforms;android-36" || true
+            yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" "platforms;android-36.1" || true
+            yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" "build-tools;36.0.0" || true
+            yes | "$SDKMANAGER_BIN" --sdk_root="$SDK_ROOT" "build-tools;36.1.0" || true
+          else
+            echo "::warning::sdkmanager not found under $SDK_ROOT"
           fi
 
       - name: Build debug APK
