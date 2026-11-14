@@ -84,6 +84,22 @@ jobs:
           fi
           echo "Verified ./debug.keystore is present."
 
+      - name: Accept Android SDK licenses
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMANAGER_BIN=""
+          if [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER_BIN="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          elif command -v sdkmanager >/dev/null 2>&1; then
+            SDKMANAGER_BIN="$(command -v sdkmanager)"
+          fi
+          if [ -n "$SDKMANAGER_BIN" ]; then
+            yes | "$SDKMANAGER_BIN" --licenses >/dev/null 2>&1 || true
+            yes | "$SDKMANAGER_BIN" "platforms;android-36" >/dev/null 2>&1 || true
+            yes | "$SDKMANAGER_BIN" "platforms;android-36.1" >/dev/null 2>&1 || true
+            yes | "$SDKMANAGER_BIN" "build-tools;36.0.0" >/dev/null 2>&1 || true
+          fi
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
