@@ -109,7 +109,9 @@ jobs:
           fi
 
       - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace --no-daemon
+        run: |
+          set -o pipefail
+          gradle :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee "$RUNNER_TEMP/gradle_build.log"
 
       - name: Verify debug APK
         run: |
@@ -235,6 +237,13 @@ jobs:
               fi
               if [ "$ARTIFACT_OUTCOME" = "success" ]; then
                 echo "- GitHub Actions artifact \`app-debug-apk\` remains available."
+              fi
+              if [ -f "$RUNNER_TEMP/gradle_build.log" ]; then
+                echo ""
+                echo "### Build Error Summary"
+                echo '```text'
+                grep -nE -A 5 "FAILURE:|What went wrong:|Caused by:|> Task .* FAILED" "$RUNNER_TEMP/gradle_build.log" | head -n 60 || tail -n 50 "$RUNNER_TEMP/gradle_build.log"
+                echo '```'
               fi
             } >> "$GITHUB_STEP_SUMMARY"
           fi
