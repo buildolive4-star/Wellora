@@ -9,10 +9,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -86,6 +89,7 @@ import com.example.ui.viewmodel.PortalEvent
 import com.example.ui.viewmodel.UiState
 import com.example.util.NotificationHelper
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -118,6 +122,38 @@ private data class PortalTabItem(
 @Composable
 private fun AureviaAppRoot() {
     val context = LocalContext.current
+    val firebaseReady = remember(context) {
+        FirebaseApp.getApps(context).isNotEmpty() ||
+            runCatching { FirebaseApp.initializeApp(context) != null }.getOrDefault(false)
+    }
+
+    if (!firebaseReady) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Aurevia Firebase Configuration Required",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = DeepCharcoal
+                )
+                Text(
+                    text = "This APK was compiled without google-services.json. Upload app/google-services.json to your GitHub repository (under the app/ folder) and rebuild the APK so Google Sign-In and Cloud Firestore can initialize.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MutedTaupe
+                )
+            }
+        }
+        return
+    }
+
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
