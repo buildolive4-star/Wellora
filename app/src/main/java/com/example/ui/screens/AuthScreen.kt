@@ -201,8 +201,13 @@ fun AuthScreen(
                                 errorMessage = msg
                             },
                             scope = scope,
-                            onAuthCancelled = {
+                            onAuthCancelled = { detail ->
                                 isLoading = false
+                                errorMessage = if (!detail.isNullOrBlank()) {
+                                    "Google Sign-In did not complete ($detail). Please try again or check that this APK's SHA-1 matches your Firebase app."
+                                } else {
+                                    "Google Sign-In was cancelled. Tap 'Sign in with Google' to continue."
+                                }
                             }
                         )
                     },

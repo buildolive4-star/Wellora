@@ -64,7 +64,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.auth.attemptAutoSignIn
-import com.example.auth.authStateFlow
 import com.example.auth.signOutUser
 import com.example.data.AureviaFirestoreRepository
 import com.example.data.CatalogRepository
@@ -90,6 +89,7 @@ import com.example.ui.viewmodel.UiState
 import com.example.util.NotificationHelper
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
@@ -157,17 +157,31 @@ private fun AureviaAppRoot() {
     val scope = rememberCoroutineScope()
     val credentialManager = remember(context) { CredentialManager.create(context) }
 
-    val authUser by Firebase.auth.authStateFlow()
-        .collectAsStateWithLifecycle(initialValue = Firebase.auth.currentUser)
-
+    var authUser by remember { mutableStateOf(Firebase.auth.currentUser) }
     var autoSignInChecked by remember { mutableStateOf(Firebase.auth.currentUser != null) }
+
+    DisposableEffect(Unit) {
+        val listener = FirebaseAuth.AuthStateListener { auth ->
+            authUser = auth.currentUser
+            if (auth.currentUser != null) {
+                autoSignInChecked = true
+            }
+        }
+        Firebase.auth.addAuthStateListener(listener)
+        onDispose {
+            Firebase.auth.removeAuthStateListener(listener)
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (Firebase.auth.currentUser == null) {
             attemptAutoSignIn(
                 context = context,
                 credentialManager = credentialManager,
-                onAuthSuccess = { autoSignInChecked = true },
+                onAuthSuccess = {
+                    authUser = Firebase.auth.currentUser
+                    autoSignInChecked = true
+                },
                 onUnauthenticated = { autoSignInChecked = true },
                 scope = scope
             )
@@ -180,7 +194,12 @@ private fun AureviaAppRoot() {
             CircularProgressIndicator(color = ChampagneGold)
         }
     } else if (user == null) {
-        AuthScreen(onAuthSuccess = { autoSignInChecked = true })
+        AuthScreen(
+            onAuthSuccess = {
+                authUser = Firebase.auth.currentUser
+                autoSignInChecked = true
+            }
+        )
     } else {
         key(user.uid) {
             AureviaPortalShell(

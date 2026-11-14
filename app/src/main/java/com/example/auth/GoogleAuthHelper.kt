@@ -2,6 +2,7 @@ package com.example.auth
 
 import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.util.Log
 import androidx.credentials.ClearCredentialStateRequest
 import androidx.credentials.CredentialManager
@@ -38,6 +39,12 @@ private fun resolveWebClientId(context: Context): String? {
     val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
     if (resId == 0) return null
     return runCatching { context.getString(resId).takeIf { it.isNotBlank() } }.getOrNull()
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 fun attemptAutoSignIn(
@@ -90,7 +97,7 @@ fun onGoogleSignInClicked(
     onAuthSuccess: () -> Unit,
     onAuthError: (String) -> Unit,
     scope: CoroutineScope,
-    onAuthCancelled: () -> Unit = {}
+    onAuthCancelled: (String?) -> Unit = {}
 ) {
     val clientId = resolveWebClientId(context) ?: run {
         onAuthError("Google Sign-In configuration missing: add app/google-services.json and rebuild.")
@@ -104,7 +111,7 @@ fun onGoogleSignInClicked(
 
     scope.launch {
         try {
-            val activity = context as? Activity
+            val activity = context.findActivity()
                 ?: throw IllegalStateException("Activity context required for sign-in")
             val result = credentialManager.getCredential(activity, request)
             val credential = result.credential
@@ -118,7 +125,7 @@ fun onGoogleSignInClicked(
             }
         } catch (e: GetCredentialCancellationException) {
             Log.w("Auth", "Google Sign-In flow cancelled or dismissed: ${e.message}", e)
-            onAuthCancelled()
+            onAuthCancelled(e.message)
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
             onAuthError(e.localizedMessage ?: "Sign-in failed. Please try again.")
