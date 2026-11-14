@@ -3,9 +3,8 @@ package com.example.ui.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.AureviaFirestoreRepository
+import com.example.data.AureviaLocalRepository
 import com.example.data.CatalogRepository
-import com.example.data.unwrapFirestoreException
 import com.example.model.Booking
 import com.example.model.PaymentMethod
 import com.example.model.PaymentTransaction
@@ -41,7 +40,7 @@ sealed interface PortalEvent {
 @OptIn(ExperimentalCoroutinesApi::class)
 class AureviaPortalViewModel(
     val catalog: CatalogRepository,
-    private val repository: AureviaFirestoreRepository,
+    private val repository: AureviaLocalRepository,
     private val currentUserId: String,
     initialDisplayName: String,
     initialEmail: String
@@ -124,11 +123,9 @@ class AureviaPortalViewModel(
     }
         .map<PortalDashboardData, UiState<PortalDashboardData>> { UiState.Success(it) }
         .catch { error ->
-            val fsError = unwrapFirestoreException(error)
-            if (fsError == null && error is CancellationException) throw error
-            val root = fsError ?: error
-            Log.w(TAG, "Dashboard stream error", root)
-            emit(UiState.Error(root.message ?: "Unable to sync your Aurevia portal."))
+            if (error is CancellationException) throw error
+            Log.w(TAG, "Dashboard stream error", error)
+            emit(UiState.Error(error.message ?: "Unable to load your Aurevia portal."))
         }
         .stateIn(
             scope = viewModelScope,
@@ -168,9 +165,8 @@ class AureviaPortalViewModel(
             } else {
                 repository.observeTicketMessages(currentUserId, ticketId)
                     .catch { error ->
-                        val fsError = unwrapFirestoreException(error)
-                        if (fsError == null && error is CancellationException) throw error
-                        Log.w(TAG, "Ticket messages error", fsError ?: error)
+                        if (error is CancellationException) throw error
+                        Log.w(TAG, "Ticket messages error", error)
                         emit(emptyList())
                     }
             }
@@ -184,7 +180,7 @@ class AureviaPortalViewModel(
     init {
         viewModelScope.launch {
             repository.ensureInitialProfile(
-                userId = currentUserId,
+                targetUserId = currentUserId,
                 fullName = initialDisplayName,
                 email = initialEmail
             )

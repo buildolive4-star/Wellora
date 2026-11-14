@@ -27,16 +27,15 @@ import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,18 +44,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
 import com.example.R
-import com.example.auth.onGoogleSignInClicked
 import com.example.ui.theme.AlabasterSurface
-import com.example.ui.theme.ChampagneGold
-import com.example.ui.theme.CrimsonAlert
-import com.example.ui.theme.CrimsonContainer
 import com.example.ui.theme.DeepBronze
 import com.example.ui.theme.DeepCharcoal
 import com.example.ui.theme.IvoryBackground
@@ -66,13 +59,10 @@ import com.example.ui.theme.WarmStoneOutline
 
 @Composable
 fun AuthScreen(
-    onAuthSuccess: () -> Unit
+    onLocalSignIn: (displayName: String, email: String) -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var displayName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
 
     Box(
         modifier = Modifier
@@ -159,8 +149,8 @@ fun AuthScreen(
                 )
                 TrustHighlightRow(
                     icon = Icons.Filled.Lock,
-                    title = "Private & Zero Raw Card Storage",
-                    subtitle = "Your bookings, receipts, and support cases stay encrypted to your account."
+                    title = "On-Device Encrypted Private Vault",
+                    subtitle = "All bookings, receipts, and concierge tickets stay privately stored on your phone."
                 )
                 TrustHighlightRow(
                     icon = Icons.Filled.Shield,
@@ -168,50 +158,34 @@ fun AuthScreen(
                     subtitle = "Instant support tickets, transparent refunds, and one-tap specialist blocking."
                 )
 
-                if (errorMessage != null) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = CrimsonContainer,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = errorMessage ?: "",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = CrimsonAlert,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
+                OutlinedTextField(
+                    value = displayName,
+                    onValueChange = { displayName = it },
+                    label = { Text("Your Name (Optional)") },
+                    placeholder = { Text("Aurevia Member") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("member_name_input")
+                )
 
-                Spacer(modifier = Modifier.height(6.dp))
+                OutlinedTextField(
+                    value = email,
+                    onValueChange = { email = it },
+                    label = { Text("Email (Optional)") },
+                    placeholder = { Text("member@aurevia.local") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("member_email_input")
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
 
                 Button(
-                    onClick = {
-                        isLoading = true
-                        errorMessage = null
-                        onGoogleSignInClicked(
-                            context = context,
-                            credentialManager = credentialManager,
-                            onAuthSuccess = {
-                                isLoading = false
-                                onAuthSuccess()
-                            },
-                            onAuthError = { msg ->
-                                isLoading = false
-                                errorMessage = msg
-                            },
-                            scope = scope,
-                            onAuthCancelled = { detail ->
-                                isLoading = false
-                                errorMessage = if (!detail.isNullOrBlank()) {
-                                    "Google Sign-In did not complete ($detail). Please try again or check that this APK's SHA-1 matches your Firebase app."
-                                } else {
-                                    "Google Sign-In was cancelled. Tap 'Sign in with Google' to continue."
-                                }
-                            }
-                        )
-                    },
-                    enabled = !isLoading,
+                    onClick = { onLocalSignIn(displayName, email) },
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = DeepCharcoal,
@@ -220,24 +194,16 @@ fun AuthScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(54.dp)
-                        .testTag("google_sign_in_button")
+                        .testTag("local_sign_in_button")
                 ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(22.dp),
-                            color = ChampagneGold,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
-                        Text(
-                            text = "Sign in with Google",
-                            style = MaterialTheme.typography.labelLarge
-                        )
-                    }
+                    Text(
+                        text = "Enter Aurevia Portal",
+                        style = MaterialTheme.typography.labelLarge
+                    )
                 }
 
                 Text(
-                    text = "After signing in, complete your mobile contact, preferred city, and safety preferences inside your Aurevia profile.",
+                    text = "Instant offline access active — customize your mobile contact, preferred city, and safety preferences inside Account.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MutedTaupe,
                     textAlign = TextAlign.Center

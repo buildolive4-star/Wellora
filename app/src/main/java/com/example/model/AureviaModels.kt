@@ -1,10 +1,6 @@
 package com.example.model
 
 import androidx.annotation.DrawableRes
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.IgnoreExtraProperties
-import com.google.firebase.firestore.ServerTimestamp
 
 enum class ServiceCategory(val displayName: String, val tagline: String) {
     SPA_WELLNESS("Spa & Wellness", "Private thermal rituals & holistic bodywork"),
@@ -134,11 +130,10 @@ data class FaqItem(
     val answer: String
 )
 
-// --- FIRESTORE DATA MODELS (All fields have defaults for no-arg deserialization) ---
+// --- LOCAL PERSISTENCE DOMAIN MODELS ---
 
-@IgnoreExtraProperties
 data class UserProfile(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val fullName: String = "",
     val email: String = "",
@@ -152,36 +147,33 @@ data class UserProfile(
     val notifyWhatsApp: Boolean = false,
     val notifyPush: Boolean = true,
     val sessionEpoch: Long = 1L,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class SavedAddress(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val label: String = "Residence",
     val line1: String = "",
     val city: String = "Mumbai",
     val postalCode: String = "",
     val isDefault: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class FavoriteService(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val serviceId: String = "",
     val serviceTitle: String = "",
     val category: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class Booking(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val bookingCode: String = "",
     val serviceId: String = "",
@@ -204,13 +196,12 @@ data class Booking(
     val paymentMethod: String = PaymentMethod.UPI.code,
     val transactionRef: String = "",
     val cancellationReason: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class PaymentTransaction(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val bookingId: String = "",
     val bookingCode: String = "",
@@ -220,13 +211,12 @@ data class PaymentTransaction(
     val status: String = "INITIATED",
     val receiptNumber: String = "",
     val gatewayRef: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class ServiceReview(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val reviewerDisplayName: String = "",
     val serviceId: String = "",
@@ -234,34 +224,31 @@ data class ServiceReview(
     val rating: Long = 5L,
     val comment: String = "",
     val isVerifiedBooking: Boolean = true,
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class SupportTicket(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val bookingId: String = "",
     val category: String = TicketCategory.GENERAL.code,
     val subject: String = "",
     val description: String = "",
     val status: String = "OPEN",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis(),
+    val updatedAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class SupportMessage(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val senderRole: String = "CUSTOMER",
     val body: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class SafetyReport(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val serviceId: String = "",
     val providerName: String = "",
@@ -270,17 +257,16 @@ data class SafetyReport(
     val details: String = "",
     val blockProvider: Boolean = false,
     val status: String = "SUBMITTED",
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis()
 )
 
-@IgnoreExtraProperties
 data class AppNotification(
-    @DocumentId val id: String = "",
+    val id: String = "",
     val userId: String = "",
     val title: String = "",
     val message: String = "",
     val type: String = NotificationType.BOOKING.code,
     val isRead: Boolean = false,
     val relatedId: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null
+    val createdAt: Long = System.currentTimeMillis()
 )

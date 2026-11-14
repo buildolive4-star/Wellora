@@ -9,13 +9,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
@@ -28,7 +25,6 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Explore
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.SupportAgent
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -41,7 +37,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -51,22 +46,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.auth.attemptAutoSignIn
-import com.example.auth.signOutUser
-import com.example.data.AureviaFirestoreRepository
+import com.example.auth.LocalSessionManager
+import com.example.data.AureviaLocalRepository
 import com.example.data.CatalogRepository
+import com.example.data.local.AureviaDatabase
 import com.example.ui.components.PackageComparisonDialog
 import com.example.ui.screens.AccountScreen
 import com.example.ui.screens.AuthScreen
@@ -77,7 +70,6 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.ServiceDetailScreen
 import com.example.ui.screens.SupportScreen
 import com.example.ui.theme.AureviaTheme
-import com.example.ui.theme.ChampagneGold
 import com.example.ui.theme.ChampagneGoldLight
 import com.example.ui.theme.DeepCharcoal
 import com.example.ui.theme.IvoryBackground
@@ -87,11 +79,6 @@ import com.example.ui.viewmodel.AureviaPortalViewModel
 import com.example.ui.viewmodel.PortalEvent
 import com.example.ui.viewmodel.UiState
 import com.example.util.NotificationHelper
-import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -122,91 +109,23 @@ private data class PortalTabItem(
 @Composable
 private fun AureviaAppRoot() {
     val context = LocalContext.current
-    val firebaseReady = remember(context) {
-        FirebaseApp.getApps(context).isNotEmpty() ||
-            runCatching { FirebaseApp.initializeApp(context) != null }.getOrDefault(false)
-    }
+    val sessionManager = remember(context) { LocalSessionManager(context) }
+    val sessionUser by sessionManager.currentUser.collectAsStateWithLifecycle()
 
-    if (!firebaseReady) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Aurevia Firebase Configuration Required",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = DeepCharcoal
-                )
-                Text(
-                    text = "This APK was compiled without google-services.json. Upload app/google-services.json to your GitHub repository (under the app/ folder) and rebuild the APK so Google Sign-In and Cloud Firestore can initialize.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MutedTaupe
-                )
-            }
-        }
-        return
-    }
-
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
-
-    var authUser by remember { mutableStateOf(Firebase.auth.currentUser) }
-    var autoSignInChecked by remember { mutableStateOf(Firebase.auth.currentUser != null) }
-
-    DisposableEffect(Unit) {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            authUser = auth.currentUser
-            if (auth.currentUser != null) {
-                autoSignInChecked = true
-            }
-        }
-        Firebase.auth.addAuthStateListener(listener)
-        onDispose {
-            Firebase.auth.removeAuthStateListener(listener)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        if (Firebase.auth.currentUser == null) {
-            attemptAutoSignIn(
-                context = context,
-                credentialManager = credentialManager,
-                onAuthSuccess = {
-                    authUser = Firebase.auth.currentUser
-                    autoSignInChecked = true
-                },
-                onUnauthenticated = { autoSignInChecked = true },
-                scope = scope
-            )
-        }
-    }
-
-    val user = authUser
-    if (!autoSignInChecked && user == null) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator(color = ChampagneGold)
-        }
-    } else if (user == null) {
+    val user = sessionUser
+    if (user == null) {
         AuthScreen(
-            onAuthSuccess = {
-                authUser = Firebase.auth.currentUser
-                autoSignInChecked = true
+            onLocalSignIn = { name, email ->
+                sessionManager.signInLocalMember(name, email)
             }
         )
     } else {
         key(user.uid) {
             AureviaPortalShell(
                 currentUserId = user.uid,
-                displayName = user.displayName ?: "Aurevia Member",
-                email = user.email ?: "",
-                credentialManager = credentialManager
+                displayName = user.displayName,
+                email = user.email,
+                onSignOut = { sessionManager.signOut() }
             )
         }
     }
@@ -217,7 +136,7 @@ private fun AureviaPortalShell(
     currentUserId: String,
     displayName: String,
     email: String,
-    credentialManager: CredentialManager
+    onSignOut: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -228,11 +147,10 @@ private fun AureviaPortalShell(
         factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY])
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
+                val dao = AureviaDatabase.getInstance(app).aureviaDao()
                 AureviaPortalViewModel(
                     catalog = CatalogRepository(),
-                    repository = AureviaFirestoreRepository(db),
+                    repository = AureviaLocalRepository(dao, currentUserId),
                     currentUserId = currentUserId,
                     initialDisplayName = displayName,
                     initialEmail = email
@@ -272,8 +190,7 @@ private fun AureviaPortalShell(
                 is PortalEvent.ShowMessage -> snackbarHostState.showSnackbar(event.text)
                 is PortalEvent.TriggerLocalNotification ->
                     NotificationHelper.showLocalNotification(context, event.title, event.body, event.type)
-                PortalEvent.ForceRemoteSignOut ->
-                    signOutUser(credentialManager, scope)
+                PortalEvent.ForceRemoteSignOut -> onSignOut()
             }
         }
     }
@@ -293,7 +210,6 @@ private fun AureviaPortalShell(
         dashData?.favorites?.map { it.serviceId }?.toSet() ?: emptySet()
     }
 
-    // Full-screen overlay routes (Booking Wizard / Service Detail)
     if (bookingDraft.service != null) {
         BookingWizardScreen(
             draft = bookingDraft,
@@ -493,13 +409,11 @@ private fun AureviaPortalShell(
                             onMarkNotificationRead = viewModel::markNotificationRead,
                             onMarkAllNotificationsRead = viewModel::markAllNotificationsRead,
                             onSendTestNotification = viewModel::sendTestNotification,
-                            onSignOutSingleDevice = {
-                                signOutUser(credentialManager, scope)
-                            },
+                            onSignOutSingleDevice = onSignOut,
                             onSignOutAllDevices = {
                                 scope.launch {
                                     viewModel.prepareLogoutAllDevices()
-                                    signOutUser(credentialManager, scope)
+                                    onSignOut()
                                 }
                             }
                         )
