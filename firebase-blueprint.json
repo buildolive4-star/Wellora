@@ -1,0 +1,241 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private customer profile, contact verification status, notification preferences, blocked providers, and session revocation epoch.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the customer." },
+        "fullName": { "type": "string", "description": "Customer full name." },
+        "email": { "type": "string", "description": "Customer email address." },
+        "mobileNumber": { "type": "string", "description": "Customer mobile phone number." },
+        "preferredCity": { "type": "string", "description": "Preferred service city." },
+        "emergencyContact": { "type": "string", "description": "Trusted emergency contact details." },
+        "isAdultConfirmed": { "type": "boolean", "description": "Attestation that customer is 18+ years old." },
+        "blockedProviderIds": { "type": "array", "description": "Bounded list of blocked provider IDs (max 50)." },
+        "notifyEmail": { "type": "boolean", "description": "Email notification opt-in." },
+        "notifySms": { "type": "boolean", "description": "SMS notification opt-in." },
+        "notifyWhatsApp": { "type": "boolean", "description": "WhatsApp notification opt-in." },
+        "notifyPush": { "type": "boolean", "description": "In-app and push notification opt-in." },
+        "sessionEpoch": { "type": "integer", "description": "Monotonic session epoch for sign-out across devices." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": [
+        "userId", "fullName", "email", "mobileNumber", "preferredCity", "emergencyContact",
+        "isAdultConfirmed", "blockedProviderIds", "notifyEmail", "notifySms", "notifyWhatsApp",
+        "notifyPush", "sessionEpoch", "createdAt", "updatedAt"
+      ]
+    },
+    "SavedAddress": {
+      "title": "SavedAddress",
+      "description": "Customer saved service location address.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "label": { "type": "string" },
+        "line1": { "type": "string" },
+        "city": { "type": "string" },
+        "postalCode": { "type": "string" },
+        "isDefault": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "label", "line1", "city", "postalCode", "isDefault", "createdAt", "updatedAt"]
+    },
+    "FavoriteService": {
+      "title": "FavoriteService",
+      "description": "Customer bookmarked favorite lifestyle service.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "serviceId", "serviceTitle", "category", "createdAt"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Customer service booking with package details, consent attestation, and lifecycle state.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookingCode": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "serviceTitle": { "type": "string" },
+        "category": { "type": "string" },
+        "providerName": { "type": "string" },
+        "packageName": { "type": "string" },
+        "city": { "type": "string" },
+        "addressSummary": { "type": "string" },
+        "scheduledDate": { "type": "string" },
+        "scheduledTimeSlot": { "type": "string" },
+        "durationMinutes": { "type": "integer" },
+        "subtotalInr": { "type": "integer" },
+        "taxInr": { "type": "integer" },
+        "totalInr": { "type": "integer" },
+        "guestNotes": { "type": "string" },
+        "consentAccepted": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["PENDING_PAYMENT", "CONFIRMED", "COMPLETED", "CANCELLED"] },
+        "paymentStatus": { "type": "string", "enum": ["PENDING", "PAID", "REFUND_REQUESTED", "REFUNDED"] },
+        "paymentMethod": { "type": "string", "enum": ["UPI", "DEBIT_CARD", "CREDIT_CARD", "NET_BANKING"] },
+        "transactionRef": { "type": "string" },
+        "cancellationReason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "bookingCode", "serviceId", "serviceTitle", "category", "providerName",
+        "packageName", "city", "addressSummary", "scheduledDate", "scheduledTimeSlot",
+        "durationMinutes", "subtotalInr", "taxInr", "totalInr", "guestNotes",
+        "consentAccepted", "status", "paymentStatus", "paymentMethod", "transactionRef",
+        "cancellationReason", "createdAt", "updatedAt"
+      ]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "Tokenized payment and refund ledger entry; never stores raw card data.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "bookingCode": { "type": "string" },
+        "method": { "type": "string", "enum": ["UPI", "DEBIT_CARD", "CREDIT_CARD", "NET_BANKING"] },
+        "maskedInstrument": { "type": "string" },
+        "amountInr": { "type": "integer" },
+        "status": { "type": "string", "enum": ["INITIATED", "CAPTURED", "REFUND_INITIATED", "REFUNDED"] },
+        "receiptNumber": { "type": "string" },
+        "gatewayRef": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "bookingId", "bookingCode", "method", "maskedInstrument",
+        "amountInr", "status", "receiptNumber", "gatewayRef", "createdAt", "updatedAt"
+      ]
+    },
+    "ServiceReview": {
+      "title": "ServiceReview",
+      "description": "Verified customer review linked to a COMPLETED booking with no public PII.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "reviewerDisplayName": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string" },
+        "isVerifiedBooking": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "userId", "reviewerDisplayName", "serviceId", "bookingId",
+        "rating", "comment", "isVerifiedBooking", "createdAt"
+      ]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "Customer support ticket, complaint, refund request, or safety escalation.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "category": { "type": "string", "enum": ["COMPLAINT", "REFUND", "CANCELLATION", "SAFETY_ESCALATION", "GENERAL"] },
+        "subject": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["OPEN", "IN_REVIEW", "RESOLVED"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "bookingId", "category", "subject", "description", "status", "createdAt", "updatedAt"]
+    },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "Live concierge chat message inside a support ticket.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "senderRole": { "type": "string", "enum": ["CUSTOMER", "CONCIERGE"] },
+        "body": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "senderRole", "body", "createdAt"]
+    },
+    "SafetyReport": {
+      "title": "SafetyReport",
+      "description": "Trust & Safety misconduct report or private feedback.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "serviceId": { "type": "string" },
+        "providerName": { "type": "string" },
+        "bookingId": { "type": "string" },
+        "reason": { "type": "string" },
+        "details": { "type": "string" },
+        "blockProvider": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["SUBMITTED", "ESCALATED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "serviceId", "providerName", "bookingId", "reason", "details", "blockProvider", "status", "createdAt"]
+    },
+    "AppNotification": {
+      "title": "AppNotification",
+      "description": "In-app notification entry for booking, payment, refund, and support updates.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["BOOKING", "PAYMENT", "REFUND", "SUPPORT", "SAFETY"] },
+        "isRead": { "type": "boolean" },
+        "relatedId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "message", "type", "isRead", "relatedId", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private customer profile and settings owned strictly by userId."
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": { "$ref": "#/entities/SavedAddress" },
+      "description": "Customer saved service addresses."
+    },
+    "/users/{userId}/favorites/{serviceId}": {
+      "schema": { "$ref": "#/entities/FavoriteService" },
+      "description": "Customer favorite services."
+    },
+    "/users/{userId}/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "Customer service bookings and lifecycle state."
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentTransaction" },
+      "description": "Tokenized payment and refund records."
+    },
+    "/users/{userId}/tickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Customer support tickets and complaints."
+    },
+    "/users/{userId}/tickets/{ticketId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/SupportMessage" },
+      "description": "Live concierge chat messages within a ticket."
+    },
+    "/users/{userId}/safety_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/SafetyReport" },
+      "description": "Trust and safety incident reports and private feedback."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/AppNotification" },
+      "description": "Customer notifications feed."
+    },
+    "/service_reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/ServiceReview" },
+      "description": "Public verified-booking reviews without private customer PII."
+    }
+  }
+}

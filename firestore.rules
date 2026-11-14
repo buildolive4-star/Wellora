@@ -1,0 +1,439 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- ENTITY VALIDATION BLUEPRINTS ---
+
+    function isValidUserProfile(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 80 &&
+             data.email is string && data.email.size() <= 120 &&
+             data.mobileNumber is string && data.mobileNumber.size() <= 25 &&
+             data.preferredCity is string && data.preferredCity.size() <= 60 &&
+             data.emergencyContact is string && data.emergencyContact.size() <= 100 &&
+             data.isAdultConfirmed is bool &&
+             data.blockedProviderIds is list && data.blockedProviderIds.size() <= 50 &&
+             (data.blockedProviderIds.size() == 0 || data.blockedProviderIds[0] is string) &&
+             data.notifyEmail is bool &&
+             data.notifySms is bool &&
+             data.notifyWhatsApp is bool &&
+             data.notifyPush is bool &&
+             data.sessionEpoch is int && data.sessionEpoch >= 1;
+    }
+
+    function isValidSavedAddress(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.label is string && data.label.size() >= 1 && data.label.size() <= 40 &&
+             data.line1 is string && data.line1.size() >= 3 && data.line1.size() <= 180 &&
+             data.city is string && data.city.size() >= 2 && data.city.size() <= 60 &&
+             data.postalCode is string && data.postalCode.size() >= 3 && data.postalCode.size() <= 20 &&
+             data.isDefault is bool;
+    }
+
+    function isValidFavoriteService(data, userId, serviceId) {
+      return data.userId is string && data.userId == userId &&
+             data.serviceId is string && data.serviceId == serviceId && data.serviceId.size() <= 64 &&
+             data.serviceTitle is string && data.serviceTitle.size() >= 1 && data.serviceTitle.size() <= 120 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60;
+    }
+
+    function isValidBooking(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.bookingCode is string && data.bookingCode.size() >= 4 && data.bookingCode.size() <= 32 &&
+             data.serviceId is string && data.serviceId.size() >= 1 && data.serviceId.size() <= 64 &&
+             data.serviceTitle is string && data.serviceTitle.size() >= 1 && data.serviceTitle.size() <= 120 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.providerName is string && data.providerName.size() >= 1 && data.providerName.size() <= 80 &&
+             data.packageName is string && data.packageName.size() >= 1 && data.packageName.size() <= 60 &&
+             data.city is string && data.city.size() >= 1 && data.city.size() <= 60 &&
+             data.addressSummary is string && data.addressSummary.size() >= 3 && data.addressSummary.size() <= 200 &&
+             data.scheduledDate is string && data.scheduledDate.size() >= 4 && data.scheduledDate.size() <= 40 &&
+             data.scheduledTimeSlot is string && data.scheduledTimeSlot.size() >= 3 && data.scheduledTimeSlot.size() <= 40 &&
+             data.durationMinutes is int && data.durationMinutes >= 15 && data.durationMinutes <= 1440 &&
+             data.subtotalInr is int && data.subtotalInr >= 0 && data.subtotalInr <= 10000000 &&
+             data.taxInr is int && data.taxInr >= 0 && data.taxInr <= 10000000 &&
+             data.totalInr is int && data.totalInr >= 0 && data.totalInr <= 20000000 &&
+             data.guestNotes is string && data.guestNotes.size() <= 400 &&
+             data.consentAccepted is bool && data.consentAccepted == true &&
+             data.status in ['PENDING_PAYMENT', 'CONFIRMED', 'COMPLETED', 'CANCELLED'] &&
+             data.paymentStatus in ['PENDING', 'PAID', 'REFUND_REQUESTED', 'REFUNDED'] &&
+             data.paymentMethod in ['UPI', 'DEBIT_CARD', 'CREDIT_CARD', 'NET_BANKING'] &&
+             data.transactionRef is string && data.transactionRef.size() <= 80 &&
+             data.cancellationReason is string && data.cancellationReason.size() <= 240;
+    }
+
+    function isValidPaymentTransaction(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.bookingId is string && isValidId(data.bookingId) &&
+             data.bookingCode is string && data.bookingCode.size() >= 4 && data.bookingCode.size() <= 32 &&
+             data.method in ['UPI', 'DEBIT_CARD', 'CREDIT_CARD', 'NET_BANKING'] &&
+             data.maskedInstrument is string && data.maskedInstrument.size() >= 3 && data.maskedInstrument.size() <= 60 &&
+             data.amountInr is int && data.amountInr >= 0 && data.amountInr <= 20000000 &&
+             data.status in ['INITIATED', 'CAPTURED', 'REFUND_INITIATED', 'REFUNDED'] &&
+             data.receiptNumber is string && data.receiptNumber.size() >= 4 && data.receiptNumber.size() <= 40 &&
+             data.gatewayRef is string && data.gatewayRef.size() <= 80;
+    }
+
+    function isValidServiceReview(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.reviewerDisplayName is string && data.reviewerDisplayName.size() >= 1 && data.reviewerDisplayName.size() <= 40 &&
+             data.serviceId is string && data.serviceId.size() >= 1 && data.serviceId.size() <= 64 &&
+             data.bookingId is string && isValidId(data.bookingId) &&
+             data.rating is int && data.rating >= 1 && data.rating <= 5 &&
+             data.comment is string && data.comment.size() >= 3 && data.comment.size() <= 600 &&
+             data.isVerifiedBooking is bool && data.isVerifiedBooking == true;
+    }
+
+    function isValidSupportTicket(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.bookingId is string && data.bookingId.size() <= 128 &&
+             data.category in ['COMPLAINT', 'REFUND', 'CANCELLATION', 'SAFETY_ESCALATION', 'GENERAL'] &&
+             data.subject is string && data.subject.size() >= 3 && data.subject.size() <= 140 &&
+             data.description is string && data.description.size() >= 3 && data.description.size() <= 1000 &&
+             data.status in ['OPEN', 'IN_REVIEW', 'RESOLVED'];
+    }
+
+    function isValidSupportMessage(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.senderRole in ['CUSTOMER', 'CONCIERGE'] &&
+             data.body is string && data.body.size() >= 1 && data.body.size() <= 1000;
+    }
+
+    function isValidSafetyReport(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.serviceId is string && data.serviceId.size() <= 64 &&
+             data.providerName is string && data.providerName.size() >= 1 && data.providerName.size() <= 80 &&
+             data.bookingId is string && data.bookingId.size() <= 128 &&
+             data.reason is string && data.reason.size() >= 3 && data.reason.size() <= 120 &&
+             data.details is string && data.details.size() >= 3 && data.details.size() <= 1000 &&
+             data.blockProvider is bool &&
+             data.status in ['SUBMITTED', 'ESCALATED'];
+    }
+
+    function isValidAppNotification(data, userId) {
+      return data.userId is string && data.userId == userId &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 400 &&
+             data.type in ['BOOKING', 'PAYMENT', 'REFUND', 'SUPPORT', 'SAFETY'] &&
+             data.isRead is bool &&
+             data.relatedId is string && data.relatedId.size() <= 128;
+    }
+
+    // --- COLLECTION MATCH RULES ---
+
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'fullName', 'email', 'mobileNumber', 'preferredCity',
+                         'emergencyContact', 'isAdultConfirmed', 'blockedProviderIds',
+                         'notifyEmail', 'notifySms', 'notifyWhatsApp', 'notifyPush',
+                         'sessionEpoch', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'fullName', 'email', 'mobileNumber', 'preferredCity',
+                         'emergencyContact', 'isAdultConfirmed', 'blockedProviderIds',
+                         'notifyEmail', 'notifySms', 'notifyWhatsApp', 'notifyPush',
+                         'sessionEpoch', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'fullName', 'email', 'mobileNumber', 'preferredCity',
+                         'emergencyContact', 'isAdultConfirmed', 'blockedProviderIds',
+                         'notifyEmail', 'notifySms', 'notifyWhatsApp', 'notifyPush',
+                         'sessionEpoch', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // Saved Addresses
+      match /addresses/{addressId} {
+        allow get: if isOwner(userId) && isValidId(addressId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(addressId) &&
+                         incoming().keys().hasAll(['userId', 'label', 'line1', 'city', 'postalCode', 'isDefault', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'label', 'line1', 'city', 'postalCode', 'isDefault', 'createdAt', 'updatedAt']) &&
+                         isValidSavedAddress(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(addressId) &&
+                         isValidSavedAddress(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['label', 'line1', 'city', 'postalCode', 'isDefault', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(addressId);
+      }
+
+      // Favorite Services
+      match /favorites/{serviceId} {
+        allow get: if isOwner(userId) && isValidId(serviceId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(serviceId) &&
+                         incoming().keys().hasAll(['userId', 'serviceId', 'serviceTitle', 'category', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'serviceId', 'serviceTitle', 'category', 'createdAt']) &&
+                         isValidFavoriteService(incoming(), userId, serviceId) &&
+                         isValidTimestamp(incoming().createdAt);
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(serviceId);
+      }
+
+      // Bookings (with Action-Based Updates and Terminal State Lock)
+      match /bookings/{bookingId} {
+        allow get: if isOwner(userId) && isValidId(bookingId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(bookingId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'bookingCode', 'serviceId', 'serviceTitle', 'category',
+                           'providerName', 'packageName', 'city', 'addressSummary',
+                           'scheduledDate', 'scheduledTimeSlot', 'durationMinutes',
+                           'subtotalInr', 'taxInr', 'totalInr', 'guestNotes',
+                           'consentAccepted', 'status', 'paymentStatus', 'paymentMethod',
+                           'transactionRef', 'cancellationReason', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'bookingCode', 'serviceId', 'serviceTitle', 'category',
+                           'providerName', 'packageName', 'city', 'addressSummary',
+                           'scheduledDate', 'scheduledTimeSlot', 'durationMinutes',
+                           'subtotalInr', 'taxInr', 'totalInr', 'guestNotes',
+                           'consentAccepted', 'status', 'paymentStatus', 'paymentMethod',
+                           'transactionRef', 'cancellationReason', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidBooking(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(bookingId) &&
+                         isValidBooking(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         !(existing().status == 'CANCELLED' && existing().paymentStatus == 'REFUNDED') &&
+                         (
+                           // Action: Confirm payment
+                           (existing().status == 'PENDING_PAYMENT' &&
+                            incoming().status == 'CONFIRMED' &&
+                            incoming().paymentStatus == 'PAID' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'transactionRef', 'updatedAt'])) ||
+                           // Action: Complete booking
+                           (existing().status == 'CONFIRMED' &&
+                            incoming().status == 'COMPLETED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                           // Action: Reschedule upcoming booking
+                           ((existing().status == 'PENDING_PAYMENT' || existing().status == 'CONFIRMED') &&
+                            incoming().status == existing().status &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['scheduledDate', 'scheduledTimeSlot', 'addressSummary', 'guestNotes', 'updatedAt'])) ||
+                           // Action: Cancel booking & request refund
+                           ((existing().status == 'PENDING_PAYMENT' || existing().status == 'CONFIRMED') &&
+                            incoming().status == 'CANCELLED' &&
+                            incoming().paymentStatus in ['PENDING', 'REFUND_REQUESTED', 'REFUNDED'] &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'paymentStatus', 'cancellationReason', 'updatedAt'])) ||
+                           // Action: Finalize refund
+                           (existing().status == 'CANCELLED' &&
+                            existing().paymentStatus == 'REFUND_REQUESTED' &&
+                            incoming().status == 'CANCELLED' &&
+                            incoming().paymentStatus == 'REFUNDED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['paymentStatus', 'updatedAt']))
+                         );
+
+        allow delete: if false;
+      }
+
+      // Tokenized Payment Transactions
+      match /payments/{paymentId} {
+        allow get: if isOwner(userId) && isValidId(paymentId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(paymentId) &&
+                         incoming().keys().hasAll([
+                           'userId', 'bookingId', 'bookingCode', 'method', 'maskedInstrument',
+                           'amountInr', 'status', 'receiptNumber', 'gatewayRef', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'bookingId', 'bookingCode', 'method', 'maskedInstrument',
+                           'amountInr', 'status', 'receiptNumber', 'gatewayRef', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidPaymentTransaction(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         existsAfter(/databases/$(database)/documents/users/$(userId)/bookings/$(incoming().bookingId));
+
+        allow update: if isOwner(userId) &&
+                         isValidId(paymentId) &&
+                         isValidPaymentTransaction(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().bookingId == existing().bookingId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         existing().status != 'REFUNDED' &&
+                         (
+                           (existing().status == 'INITIATED' && incoming().status == 'CAPTURED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'gatewayRef', 'updatedAt'])) ||
+                           (existing().status == 'CAPTURED' && incoming().status == 'REFUND_INITIATED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                           (existing().status == 'REFUND_INITIATED' && incoming().status == 'REFUNDED' &&
+                            incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']))
+                         );
+
+        allow delete: if false;
+      }
+
+      // Support Tickets
+      match /tickets/{ticketId} {
+        allow get: if isOwner(userId) && isValidId(ticketId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(ticketId) &&
+                         incoming().keys().hasAll(['userId', 'bookingId', 'category', 'subject', 'description', 'status', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'bookingId', 'category', 'subject', 'description', 'status', 'createdAt', 'updatedAt']) &&
+                         isValidSupportTicket(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(ticketId) &&
+                         isValidSupportTicket(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         existing().status != 'RESOLVED' &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']);
+
+        allow delete: if false;
+
+        match /messages/{messageId} {
+          allow get: if isOwner(userId) && isValidId(ticketId) && isValidId(messageId);
+          allow list: if isOwner(userId) && isValidId(ticketId);
+
+          allow create: if isOwner(userId) &&
+                           isValidId(ticketId) &&
+                           isValidId(messageId) &&
+                           incoming().keys().hasAll(['userId', 'senderRole', 'body', 'createdAt']) &&
+                           incoming().keys().hasOnly(['userId', 'senderRole', 'body', 'createdAt']) &&
+                           isValidSupportMessage(incoming(), userId) &&
+                           isValidTimestamp(incoming().createdAt) &&
+                           existsAfter(/databases/$(database)/documents/users/$(userId)/tickets/$(ticketId));
+
+          allow update, delete: if false;
+        }
+      }
+
+      // Trust & Safety Reports (Append-Only)
+      match /safety_reports/{reportId} {
+        allow get: if isOwner(userId) && isValidId(reportId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(reportId) &&
+                         incoming().keys().hasAll(['userId', 'serviceId', 'providerName', 'bookingId', 'reason', 'details', 'blockProvider', 'status', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'serviceId', 'providerName', 'bookingId', 'reason', 'details', 'blockProvider', 'status', 'createdAt']) &&
+                         isValidSafetyReport(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt);
+
+        allow update, delete: if false;
+      }
+
+      // Notifications
+      match /notifications/{notificationId} {
+        allow get: if isOwner(userId) && isValidId(notificationId);
+        allow list: if isOwner(userId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(notificationId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'message', 'type', 'isRead', 'relatedId', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'message', 'type', 'isRead', 'relatedId', 'createdAt']) &&
+                         isValidAppNotification(incoming(), userId) &&
+                         isValidTimestamp(incoming().createdAt);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(notificationId) &&
+                         isValidAppNotification(incoming(), userId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['isRead']);
+
+        allow delete: if isOwner(userId) && isValidId(notificationId);
+      }
+    }
+
+    // Verified Public Service Reviews (No private PII; requires COMPLETED booking)
+    match /service_reviews/{reviewId} {
+      allow get, list: if isSignedIn();
+
+      allow create: if isSignedIn() &&
+                       isValidId(reviewId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'reviewerDisplayName', 'serviceId', 'bookingId',
+                         'rating', 'comment', 'isVerifiedBooking', 'createdAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'reviewerDisplayName', 'serviceId', 'bookingId',
+                         'rating', 'comment', 'isVerifiedBooking', 'createdAt'
+                       ]) &&
+                       isValidServiceReview(incoming()) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       exists(/databases/$(database)/documents/users/$(request.auth.uid)/bookings/$(incoming().bookingId)) &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)/bookings/$(incoming().bookingId)).data.status == 'COMPLETED' &&
+                       get(/databases/$(database)/documents/users/$(request.auth.uid)/bookings/$(incoming().bookingId)).data.serviceId == incoming().serviceId;
+
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(reviewId) && existing().userId == request.auth.uid;
+    }
+  }
+}

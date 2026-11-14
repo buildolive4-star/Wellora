@@ -1,0 +1,6 @@
+{
+  "name": "Aurevia",
+  "description": "AUREVIA GROUP luxury lifestyle, wellness, and curated experiences customer portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
